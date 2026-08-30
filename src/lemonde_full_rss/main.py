@@ -8,6 +8,7 @@ from .database import DB
 from .feeds import parse
 from .fetchers.http import HttpArticleFetcher
 from .fetchers.playwright import PlaywrightArticleFetcher
+from .fetchers.kiosque import KiosqueArticleFetcher
 from .extractors.generic import extract
 logging.basicConfig(level=logging.INFO,format='%(levelname)s %(message)s');s=Settings();db=DB(s.db);session_state='unknown';last_refresh=None
 async def refresh():
@@ -19,7 +20,7 @@ async def refresh():
     for i in parse(r.content):
      a=db.add(i,f)
      if a['extraction_status']!='success':
-      fetcher = PlaywrightArticleFetcher(s) if s.fetcher == 'playwright' else HttpArticleFetcher(s)
+      fetcher = {'playwright': PlaywrightArticleFetcher, 'kiosque': KiosqueArticleFetcher}.get(s.fetcher, HttpArticleFetcher)(s)
       code,html,auth=await fetcher.fetch(i['url'])
       if auth or code in (401,403): session_state='expired';db.update(a['id'],extraction_status='authentication_required',http_status=code,error='session expired');continue
       z=extract(html,i['url']); status='success' if z['chars']>300 else 'extraction_failed';db.update(a['id'],title=z['title'] or i['title'],content_html=z['content_html'],extraction_status=status,extraction_method=s.fetcher,http_status=code,fetched_at=time.strftime('%Y-%m-%dT%H:%M:%SZ'));new+=status=='success'

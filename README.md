@@ -33,3 +33,14 @@ docker compose -f docker-compose.yml -f docker-compose.playwright.yml up -d --bu
 ```
 
 Le fichier `docker-compose.playwright.yml` est local et peut rester hors Git. Les cookies sont toujours lus depuis `secrets/lemonde-cookies.json` et ne sont jamais journalisés.
+
+## Backend Kiosque
+
+Kiosque peut utiliser l’authentification Le Monde par identifiant et mot de passe. Créez `kiosque-config/kiosque.conf` avec une section `[https://www.lemonde.fr/]`, puis utilisez :
+
+```bash
+cp docker-compose.kiosque.example.yml docker-compose.kiosque.yml
+docker compose -f docker-compose.yml -f docker-compose.kiosque.yml up -d --build
+```
+
+Le mot de passe reste dans le fichier local monté en lecture seule et ne doit jamais être committé.

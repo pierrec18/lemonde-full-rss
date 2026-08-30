@@ -1,0 +1,9 @@
+services:
+  lemonde-full-rss:
+    build:
+      context: .
+      dockerfile: Dockerfile.kiosque
+    environment:
+      FETCHER: kiosque
+    volumes:
+      - ./kiosque-config:/root/.config/kiosque:ro
