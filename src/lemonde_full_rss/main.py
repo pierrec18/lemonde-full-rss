@@ -23,7 +23,7 @@ async def refresh():
       fetcher = {'playwright': PlaywrightArticleFetcher, 'kiosque': KiosqueArticleFetcher}.get(s.fetcher, HttpArticleFetcher)(s)
       code,html,auth=await fetcher.fetch(i['url'])
       if auth or code in (401,403): session_state='expired';db.update(a['id'],extraction_status='authentication_required',http_status=code,error='session expired');continue
-      z=extract(html,i['url']); status='success' if z['chars']>300 else 'extraction_failed';db.update(a['id'],title=z['title'] or i['title'],content_html=z['content_html'],extraction_status=status,extraction_method=s.fetcher,http_status=code,fetched_at=time.strftime('%Y-%m-%dT%H:%M:%SZ'));new+=status=='success'
+      z=extract(html,i['url']); status='success' if z['chars']>300 else 'extraction_failed';db.update(a['id'],content_html=z['content_html'],extraction_status=status,extraction_method=s.fetcher,http_status=code,fetched_at=time.strftime('%Y-%m-%dT%H:%M:%SZ'));new+=status=='success'
     logging.info('feed_refresh feed=%s new=%s',slug,new)
   last_refresh=time.time()
  except Exception: logging.exception('feed_refresh_failed')
