@@ -1,0 +1,7 @@
+.env
+data/*.db
+secrets/*
+!secrets/.gitkeep
+__pycache__/
+.pytest_cache/
+*.html

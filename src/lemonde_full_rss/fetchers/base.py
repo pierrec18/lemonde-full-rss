@@ -1,0 +1,3 @@
+from typing import Protocol
+class ArticleFetcher(Protocol):
+ async def fetch(self,url):...
