@@ -1,6 +1,7 @@
 import asyncio
 import html
 import re
+from bs4 import BeautifulSoup
 
 
 def _remove_kiosque_metadata(markdown):
@@ -16,7 +17,24 @@ def _remove_kiosque_metadata(markdown):
             body = "\n".join(lines[i + 1:]).strip()
             if body:
                 return body
+    # Some Kiosque versions emit the complete metadata header on one line and
+    # do not preserve the blank line.  It is removed after Markdown conversion
+    # as well (see _clean_html), so leave the body intact here.
     return markdown.strip()
+
+
+def _clean_html(document):
+    """Remove Kiosque's metadata paragraph and Pandoc directives."""
+    soup = BeautifulSoup(document, "html.parser")
+    for element in soup.find_all(["p", "div"]):
+        text = " ".join(element.get_text(" ", strip=True).split())
+        if (text.lower().startswith("title:") and " author:" in text.lower()
+                and " description:" in text.lower()):
+            element.decompose()
+            continue
+        if ":::" in text:
+            element.decompose()
+    return str(soup)
 
 
 class KiosqueArticleFetcher:
@@ -43,6 +61,7 @@ class KiosqueArticleFetcher:
                 body = "<p>" + "</p><p>".join(
                     html.escape(x.strip()) for x in re.split(r"\n\s*\n", markdown) if x.strip()
                 ) + "</p>"
+            body = _clean_html(body)
             return 200, f"<html><body><article>{body}</article></body></html>", False
         except Exception:
             return 0, "", True
