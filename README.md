@@ -22,3 +22,14 @@ python -m pytest
 ```
 
 Le MVP utilise HTTP uniquement. Aucun mécanisme de contournement n'est prévu ; Playwright reste une extension ultérieure si le HTML authentifié ne contient pas le contenu.
+## Backend Playwright (si le site renvoie un Client Challenge)
+
+Le backend HTTP est utilisé par défaut. Si Le Monde renvoie une page `Client Challenge`, utilisez l’image Chromium incluse :
+
+```bash
+cp docker-compose.playwright.example.yml docker-compose.playwright.yml
+sed -i 's/^FETCHER=.*/FETCHER=playwright/' .env
+docker compose -f docker-compose.yml -f docker-compose.playwright.yml up -d --build
+```
+
+Le fichier `docker-compose.playwright.yml` est local et peut rester hors Git. Les cookies sont toujours lus depuis `secrets/lemonde-cookies.json` et ne sont jamais journalisés.

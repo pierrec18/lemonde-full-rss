@@ -1,0 +1,7 @@
+services:
+  lemonde-full-rss:
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
+    environment:
+      FETCHER: playwright
