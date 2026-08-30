@@ -8,7 +8,8 @@ services:
       - ./config:/app/config:ro
       - ./secrets:/app/secrets:ro
     expose: ["8000"]
-    networks: [internal, proxy]
+    networks: [internal]
 networks:
   internal:
     driver: bridge
+  # À activer pour NGINX Proxy Manager avec un override local.
