@@ -1,14 +1,31 @@
 import sqlite3
+from datetime import datetime,timezone
+from email.utils import parsedate_to_datetime
+
+def normalize_date(value):
+ if not value:return value
+ try:
+  text=str(value).strip()
+  try: date=datetime.fromisoformat(text.replace('Z','+00:00'))
+  except ValueError: date=parsedate_to_datetime(text)
+  if date.tzinfo is None:date=date.replace(tzinfo=timezone.utc)
+  return date.astimezone(timezone.utc).isoformat()
+ except (TypeError,ValueError,OverflowError):return value
+
 SCHEMA='''CREATE TABLE IF NOT EXISTS articles(id INTEGER PRIMARY KEY,url TEXT UNIQUE,canonical_url TEXT,title TEXT,subtitle TEXT,author TEXT,published_at TEXT,updated_at TEXT,fetched_at TEXT,content_html TEXT,extraction_status TEXT,extraction_method TEXT,http_status INTEGER,error TEXT,retries INTEGER DEFAULT 0,image_url TEXT);CREATE TABLE IF NOT EXISTS feeds(id INTEGER PRIMARY KEY,slug TEXT UNIQUE,name TEXT,source_url TEXT);CREATE TABLE IF NOT EXISTS article_feeds(article_id INTEGER,feed_id INTEGER,UNIQUE(article_id,feed_id));'''
 class DB:
  def __init__(self,path):
   self.c=sqlite3.connect(path,check_same_thread=False);self.c.row_factory=sqlite3.Row;self.c.executescript(SCHEMA)
   if 'image_url' not in [x[1] for x in self.c.execute('PRAGMA table_info(articles)')]: self.c.execute('ALTER TABLE articles ADD COLUMN image_url TEXT')
+  for row in self.c.execute('SELECT id,published_at FROM articles WHERE published_at IS NOT NULL').fetchall():
+   value=normalize_date(row['published_at'])
+   if value != row['published_at']:self.c.execute('UPDATE articles SET published_at=? WHERE id=?',(value,row['id']))
   self.c.commit()
  def feed(self,slug,name,url):self.c.execute('INSERT OR IGNORE INTO feeds(slug,name,source_url) VALUES(?,?,?)',(slug,name,url));self.c.commit();return self.c.execute('SELECT * FROM feeds WHERE slug=?',(slug,)).fetchone()
  def get(self,url):return self.c.execute('SELECT * FROM articles WHERE canonical_url=?',(url,)).fetchone()
  def add(self,i,f):
-  self.c.execute('INSERT OR IGNORE INTO articles(url,canonical_url,title,published_at,image_url,extraction_status) VALUES(?,?,?,?,?,?)',(i['url'],i['url'],i.get('title',''),i.get('published_at'),i.get('image_url',''),'pending'));a=self.get(i['url']);self.c.execute('UPDATE articles SET title=?,published_at=?,image_url=? WHERE id=?',(i.get('title',''),i.get('published_at'),i.get('image_url',''),a['id']));self.c.execute('INSERT OR IGNORE INTO article_feeds VALUES(?,?)',(a['id'],f['id']));self.c.commit();return self.get(i['url'])
+  published=normalize_date(i.get('published_at'))
+  self.c.execute('INSERT OR IGNORE INTO articles(url,canonical_url,title,published_at,image_url,extraction_status) VALUES(?,?,?,?,?,?)',(i['url'],i['url'],i.get('title',''),published,i.get('image_url',''),'pending'));a=self.get(i['url']);self.c.execute('UPDATE articles SET title=?,published_at=?,image_url=? WHERE id=?',(i.get('title',''),published,i.get('image_url',''),a['id']));self.c.execute('INSERT OR IGNORE INTO article_feeds VALUES(?,?)',(a['id'],f['id']));self.c.commit();return self.get(i['url'])
  def update(self,id,**kw):self.c.execute('UPDATE articles SET '+','.join(k+'=?' for k in kw)+' WHERE id=?',(*kw.values(),id));self.c.commit()
  def items(self,slug=None):
   q='SELECT DISTINCT a.* FROM articles a JOIN article_feeds af ON a.id=af.article_id JOIN feeds f ON f.id=af.feed_id';p=[]
