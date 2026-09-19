@@ -21,7 +21,8 @@ POC : `python scripts/test_article.py URL --save-html /tmp/article.html`.
 python -m pytest
 ```
 
-Le MVP utilise HTTP uniquement. Aucun mécanisme de contournement n'est prévu ; Playwright reste une extension ultérieure si le HTML authentifié ne contient pas le contenu.
+Le backend HTTP sert surtout au développement et aux diagnostics. Pour le déploiement de production avec extraction du texte intégral, utilisez **Kiosque** comme décrit ci-dessous.
+
 ## Backend Playwright (si le site renvoie un Client Challenge)
 
 Le backend HTTP est utilisé par défaut. Si Le Monde renvoie une page `Client Challenge`, utilisez l’image Chromium incluse :
@@ -34,13 +35,54 @@ docker compose -f docker-compose.yml -f docker-compose.playwright.yml up -d --bu
 
 Le fichier `docker-compose.playwright.yml` est local et peut rester hors Git. Les cookies sont toujours lus depuis `secrets/lemonde-cookies.json` et ne sont jamais journalisés.
 
-## Backend Kiosque
+## Backend Kiosque — configuration de production recommandée
 
-Kiosque peut utiliser l’authentification Le Monde par identifiant et mot de passe. Créez `kiosque-config/kiosque.conf` avec une section `[https://www.lemonde.fr/]`, puis utilisez :
+[Kiosque](https://www.xoolive.org/kiosque/) assure l’authentification Le Monde et l’extraction du texte intégral. Créez `kiosque-config/kiosque.conf` avec une section `[https://www.lemonde.fr/]`, puis préparez l’override local :
 
 ```bash
 cp docker-compose.kiosque.example.yml docker-compose.kiosque.yml
-docker compose -f docker-compose.yml -f docker-compose.kiosque.yml up -d --build
 ```
 
+Toutes les commandes qui créent ou recréent le service doivent ensuite inclure **les deux fichiers Compose** :
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.kiosque.yml \
+  up -d --build
+```
+
+Utilisez également les deux fichiers pour les commandes d’exploitation afin d’éviter toute ambiguïté :
+
+```bash
+# État
+docker compose -f docker-compose.yml -f docker-compose.kiosque.yml ps
+
+# Journaux
+docker compose -f docker-compose.yml -f docker-compose.kiosque.yml logs -f --tail 50 lemonde-full-rss
+
+# Recréation après une modification
+docker compose -f docker-compose.yml -f docker-compose.kiosque.yml up -d --build --force-recreate
+```
+
+Vérifiez le backend réellement actif après chaque recréation :
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.kiosque.yml \
+  exec -T lemonde-full-rss \
+  python -c 'from lemonde_full_rss.config import Settings; print(Settings().fetcher)'
+```
+
+La sortie attendue est `kiosque`. Un simple `docker compose up -d` sans l’override peut recréer le service avec le backend HTTP : les articles sont alors découverts mais leur contenu intégral peut échouer à l’extraction et ils n’apparaissent pas dans le flux généré.
+
 Le mot de passe reste dans le fichier local monté en lecture seule et ne doit jamais être committé.
+
+## Diagnostic d’un flux figé
+
+1. Comparez la source officielle et le flux généré.
+2. Vérifiez l’URL réellement montée dans `/app/config/feeds.yaml`. La Une utilise actuellement `https://www.lemonde.fr/rss/une.xml` ; l’ancienne URL `/rss/tag/une.xml` renvoie HTTP 404.
+3. Contrôlez `/health`, mais ne vous fiez pas uniquement à `last_refresh` : la boucle peut terminer sans nouvel article si la source renvoie une page d’erreur ou un flux vide.
+4. Vérifiez que `Settings().fetcher` vaut bien `kiosque` avec la commande ci-dessus.
+5. Consultez les journaux et les statuts `extraction_status` si les articles sont présents dans SQLite mais absents du XML. Le rendu RSS ne publie que les articles dont l’extraction est marquée `success`.
